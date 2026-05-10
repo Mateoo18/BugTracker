@@ -1,0 +1,23 @@
+[2026-05-10 21:33:03,360] ERROR bugtracker: Could not send developer invite email
+Traceback (most recent call last):
+  File "D:\Projects\BugTracker\presentation\web\views.py", line 331, in developer_create
+    send_mail(
+  File "D:\Projects\BugTracker\bugtracker_venv\Lib\site-packages\django\core\mail\__init__.py", line 88, in send_mail
+    return mail.send()
+           ^^^^^^^^^^^
+  File "D:\Projects\BugTracker\bugtracker_venv\Lib\site-packages\django\core\mail\message.py", line 301, in send
+    return self.get_connection(fail_silently).send_messages([self])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\BugTracker\bugtracker_venv\Lib\site-packages\django\core\mail\backends\smtp.py", line 128, in send_messages
+    new_conn_created = self.open()
+                       ^^^^^^^^^^^
+  File "D:\Projects\BugTracker\bugtracker_venv\Lib\site-packages\django\core\mail\backends\smtp.py", line 95, in open
+    self.connection.login(self.username, self.password)
+  File "D:\Python\Lib\smtplib.py", line 750, in login
+    raise last_exception
+  File "D:\Python\Lib\smtplib.py", line 739, in login
+    (code, resp) = self.auth(
+                   ^^^^^^^^^^
+  File "D:\Python\Lib\smtplib.py", line 662, in auth
+    raise SMTPAuthenticationError(code, resp)
+smtplib.SMTPAuthenticationError: (535, b'5.7.8 Username and Password not accepted. For more information, go to\n5.7.8  https://support.google.com/mail/?p=BadCredentials 5b1f17b1804b1-48e6f9fbf12sm143261875e9.0 - gsmtp')

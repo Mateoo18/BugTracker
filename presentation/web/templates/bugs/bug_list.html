@@ -1,0 +1,59 @@
+﻿{% extends "base.html" %}
+{% block title %}Bug list - BugTracker{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">{% if public_board %}Resolved public board{% else %}Bug list{% endif %}</h1>
+    <a class="btn btn-primary" href="{% url 'web:bug_create' %}"><i class="fa-solid fa-plus"></i> Report a bug</a>
+</div>
+<form class="panel p-3 mb-3" method="get">
+    <div class="row g-2">
+        <div class="col-md-4"><input class="form-control" name="q" placeholder="Search title, company, module, product" value="{{ request.GET.q }}"></div>
+        {% if not public_board %}
+            <div class="col-md-2">
+                <select class="form-select" name="status">
+                    <option value="">Status</option>
+                    {% for value,label in status_choices %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+        {% endif %}
+        <div class="col-md-2">
+            <select class="form-select" name="priority">
+                <option value="">Priority</option>
+                {% for value,label in priority_choices %}<option value="{{ value }}" {% if request.GET.priority == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" name="severity">
+                <option value="">Severity</option>
+                {% for value,label in severity_choices %}<option value="{{ value }}" {% if request.GET.severity == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2"><button class="btn btn-outline-primary w-100"><i class="fa-solid fa-filter"></i> Apply</button></div>
+    </div>
+    {% if public_board %}
+        <div class="small text-muted mt-2">This board always shows resolved, verified, and closed bugs only.</div>
+    {% endif %}
+</form>
+{% if applied_filters %}
+    <div class="mb-3">
+        <span class="text-muted small me-2">Active filters:</span>
+        {% for filter in applied_filters %}
+            <span class="badge text-bg-primary">{{ filter.label }}: {{ filter.value }}</span>
+        {% endfor %}
+        <a class="small ms-2" href="{% if public_board %}{% url 'web:public_resolved_bugs' %}{% else %}{% url 'web:bug_list' %}{% endif %}">Clear filters</a>
+    </div>
+{% endif %}
+<div class="panel p-3">
+    {% include "bugs/partials/bug_table.html" with bugs=page_obj.object_list %}
+    <nav>
+        <ul class="pagination mb-0">
+            {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>{% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>{% endif %}
+        </ul>
+    </nav>
+</div>
+{% endblock %}
+
+
+

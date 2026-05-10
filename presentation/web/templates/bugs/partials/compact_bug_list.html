@@ -1,0 +1,16 @@
+﻿<div class="list-group list-group-flush">
+    {% for bug in bugs %}
+        <a class="list-group-item list-group-item-action px-0" href="{{ bug.get_absolute_url }}">
+            <div class="d-flex justify-content-between gap-2">
+                <span>{{ bug.title }}</span>
+                <span class="badge priority-{{ bug.priority }}">{{ bug.priority }}</span>
+            </div>
+            <div class="small text-muted">{{ bug.company.name }} - {{ bug.module }} - {{ bug.get_status_display }}</div>
+        </a>
+    {% empty %}
+        <div class="text-muted">No data available.</div>
+    {% endfor %}
+</div>
+
+
+

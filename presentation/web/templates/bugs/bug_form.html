@@ -1,0 +1,41 @@
+﻿{% extends "base.html" %}
+{% block title %}Report a bug - BugTracker{% endblock %}
+{% block content %}
+<div class="row g-3 justify-content-center">
+    <div class="col-lg-8">
+        <div class="panel p-4">
+            <h1 class="h3 mb-2">Report a bug</h1>
+            <p class="text-muted">Describe what happened and estimate the impact. Product Owners can refine priority later.</p>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Submit bug report</button>
+            </form>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="panel p-3 metric-help">
+            <h2 class="h5">How to rate the metrics</h2>
+            <div class="mb-3">
+                <div class="fw-semibold">Severity</div>
+                <div class="small">Low: visual or minor issue. Medium: common workflow is degraded. High: important feature is broken. Critical: outage, data loss, or security risk.</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold">Impact: 1-5</div>
+                <div class="small">1 = one user or rare case, 3 = frequent workflow, 5 = many users blocked or revenue-critical path.</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold">Similar reports</div>
+                <div class="small">0-2 is low, 3-9 means repeated signal, 10+ means the issue is widespread.</div>
+            </div>
+            <div>
+                <div class="fw-semibold">Module importance: 1-5</div>
+                <div class="small">1 = optional area, 3 = regular product flow, 5 = core business functionality such as login, payment, or production reporting.</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+

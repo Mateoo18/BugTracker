@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Add team - BugTracker{% endblock %}
+{% block content %}
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="panel p-4">
+            <h1 class="h3 mb-2">Add team</h1>
+            <p class="text-muted">Create a team for your company. Developers can be assigned to this team when their account is created or edited by an admin.</p>
+            <form method="post">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button class="btn btn-primary"><i class="fa-solid fa-people-group"></i> Create team</button>
+            </form>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="panel p-3">
+            <h2 class="h5">Existing company teams</h2>
+            <div class="list-group list-group-flush">
+                {% for team in teams %}
+                    <div class="list-group-item px-0">
+                        <div class="fw-semibold">{{ team.name }}</div>
+                        <div class="small text-muted">{{ team.module|default:"No module set" }}</div>
+                    </div>
+                {% empty %}
+                    <div class="text-muted">No teams yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

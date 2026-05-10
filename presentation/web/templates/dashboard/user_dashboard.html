@@ -1,0 +1,42 @@
+﻿{% extends "base.html" %}
+{% block title %}Dashboard - BugTracker{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Reporter dashboard</h1>
+        <p class="text-muted mb-0">Your submitted bugs and the public board of resolved issues.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'web:bug_create' %}"><i class="fa-solid fa-plus"></i> Report a bug</a>
+</div>
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="panel p-3">
+            <h2 class="h5">My latest reports</h2>
+            {% include "bugs/partials/bug_table.html" with bugs=my_bugs %}
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="panel p-3 mb-3">
+            <h2 class="h5">My bug statuses</h2>
+            <canvas id="statusChart" height="180"></canvas>
+        </div>
+        <div class="panel p-3">
+            <h2 class="h5">Recently resolved</h2>
+            {% include "bugs/partials/compact_bug_list.html" with bugs=public_resolved %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const userStats = [{% for item in stats %}{label: "{{ item.status }}", value: {{ item.count }}},{% endfor %}];
+new Chart(document.getElementById('statusChart'), {
+  type: 'doughnut',
+  data: { labels: userStats.map(x => x.label), datasets: [{ data: userStats.map(x => x.value), backgroundColor: ['#2563eb', '#16a34a', '#f59e0b', '#dc2626', '#7c3aed'] }] },
+  options: { plugins: { legend: { position: 'bottom' } } }
+});
+</script>
+{% endblock %}
+
+
+
