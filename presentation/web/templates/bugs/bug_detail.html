@@ -43,12 +43,7 @@
                 </div>
                 <button class="btn btn-sm btn-outline-primary">Upload</button>
             </form>
-            {% if can_manage %}
-            <div class="mt-2">
-                <label class="small">Notification emails (comma-separated) — visible in comments section</label>
-                {{ notification_form.notification_email }}
-            </div>
-            {% endif %}
+
         </div>
         <div class="panel p-3">
             <div class="d-flex justify-content-between align-items-center">
@@ -85,10 +80,7 @@
                 <input type="hidden" name="action" value="comment">
                 <h3 class="h6">Add a comment</h3>
                 {{ comment_form.as_p }}
-                <div class="mb-2">
-                    <label for="id_image">Attachment (optional)</label>
-                    <input type="file" name="image" id="id_image" accept="image/png,image/jpeg">
-                </div>
+                {# Removed direct attachment upload in comment form per UX request #}
                 <button class="btn btn-outline-primary"><i class="fa-solid fa-comment"></i> Post comment</button>
             </form>
         </div>

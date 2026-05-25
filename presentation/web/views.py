@@ -215,7 +215,7 @@ def bug_detail(request, pk):
                 comment.is_internal = False
             comment.save()
             messages.success(request, "Comment added.")
-            messages.success(request, "Comment added.")
+            # attachment upload via comment was removed; attachments should be added via the Attachments section
             return redirect(bug)
     if request.method == "POST" and request.POST.get("action") == "attach_bug":
         # handle attachment upload for existing bug
