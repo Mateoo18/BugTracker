@@ -56,19 +56,23 @@ class BugReportForm(forms.ModelForm):
 
 
 class BugNotificationForm(forms.ModelForm):
+    notification_email = forms.CharField(
+        required=False,
+        label="Ticket notification list",
+        widget=forms.Textarea(attrs={"rows": 2, "class": "form-control", "placeholder": "email1@example.com, email2@example.com"}),
+        help_text="Comma-separated emails that will receive ticket updates",
+    )
+
     class Meta:
         model = Bug
-        fields = ("notification_email", "notification_emails")
+        fields = ("notification_email",)
 
     def clean_notification_email(self):
         email = self.cleaned_data.get("notification_email", "").strip()
         return email
 
     def clean_notification_emails(self):
-        txt = self.cleaned_data.get("notification_emails", "")
-        # basic split and strip
-        emails = [e.strip() for e in txt.split(",") if e.strip()]
-        return ",".join(emails)
+        return ''
         help_texts = {
             "module": "Examples: Payments, Login, Reports, Notifications.",
             "severity": "Low = cosmetic or minor, Medium = degraded workflow, High = major feature broken, Critical = outage, data loss, or security risk.",

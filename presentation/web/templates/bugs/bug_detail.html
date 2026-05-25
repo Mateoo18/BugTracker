@@ -44,14 +44,10 @@
                 <button class="btn btn-sm btn-outline-primary">Upload</button>
             </form>
             {% if can_manage %}
-            <form method="post" class="mt-2">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="notification">
-                <label class="small">Notification email for updates</label>
-                <div class="mb-1">Primary: {{ notification_form.notification_email }}</div>
-                <div class="mb-1">Also notify (comma-separated): {{ notification_form.notification_emails }}</div>
-                <button class="btn btn-sm btn-outline-secondary mt-1">Save</button>
-            </form>
+            <div class="mt-2">
+                <label class="small">Notification emails (comma-separated) — visible in comments section</label>
+                {{ notification_form.notification_email }}
+            </div>
             {% endif %}
         </div>
         <div class="panel p-3">
@@ -59,6 +55,17 @@
                 <h2 class="h5 mb-0">Comments</h2>
                 <span class="small text-muted">Internal notes are visible only to company staff.</span>
             </div>
+            {% if can_manage %}
+            <div class="mb-3 mt-2">
+                <label class="form-label">Ticket notification list</label>
+                <form method="post" class="">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="notification">
+                    {{ notification_form.notification_email }}
+                    <div class="mt-2"><button class="btn btn-sm btn-outline-secondary">Save</button></div>
+                </form>
+            </div>
+            {% endif %}
             {% for comment in comments %}
                 <div class="border-bottom py-2">
                     <div class="small text-muted">{{ comment.author }} - {{ comment.created_at }}{% if comment.is_internal %} - internal note{% endif %}</div>
