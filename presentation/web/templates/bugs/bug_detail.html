@@ -39,7 +39,23 @@
                 <input type="hidden" name="action" value="attach_bug">
                 <div class="mb-2">
                     <label for="id_bug_image">Add attachment</label>
-                    <input type="file" name="bug_image" id="id_bug_image">
+                    <div class="input-group">
+                        <button type="button" id="choose_file_btn" class="btn btn-sm btn-outline-secondary">Choose file</button>
+                        <span id="chosen_file_name" class="form-control form-control-sm">No file chosen</span>
+                    </div>
+                    <input type="file" name="bug_image" id="id_bug_image" style="display:none">
+                    <script>
+                        (function(){
+                            const btn = document.getElementById('choose_file_btn');
+                            const input = document.getElementById('id_bug_image');
+                            const nameSpan = document.getElementById('chosen_file_name');
+                            btn.addEventListener('click', ()=> input.click());
+                            input.addEventListener('change', ()=>{
+                                const f = input.files && input.files[0];
+                                nameSpan.textContent = f ? f.name : 'No file chosen';
+                            });
+                        })();
+                    </script>
                 </div>
                 <button class="btn btn-sm btn-outline-primary">Upload</button>
             </form>
