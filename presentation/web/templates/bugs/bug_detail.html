@@ -56,9 +56,71 @@
                 <form method="post" class="">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="notification">
-                    {{ notification_form.notification_email }}
+                    <div class="d-flex gap-2 mb-2">
+                        <input id="notif_email_input" type="email" class="form-control form-control-sm" placeholder="wprowadź adres e-mail i kliknij Dodaj">
+                        <button id="notif_add_btn" type="button" class="btn btn-sm btn-outline-primary">Dodaj</button>
+                    </div>
+                    <div id="notif_chips" class="mb-2"></div>
+                    <div style="display:none">{{ notification_form.notification_email }}</div>
                     <div class="mt-2"><button class="btn btn-sm btn-outline-secondary">Save</button></div>
                 </form>
+                <script>
+                    (function(){
+                        const form = document.currentScript.parentElement.querySelector('form');
+                        const addBtn = document.getElementById('notif_add_btn');
+                        const input = document.getElementById('notif_email_input');
+                        const chips = document.getElementById('notif_chips');
+                        const textarea = form.querySelector('textarea') || form.querySelector('[name="notification_email"]');
+
+                        function parseEmails(val) {
+                            return val.split(',').map(s=>s.trim()).filter(Boolean);
+                        }
+
+                        function render() {
+                            const list = textarea ? parseEmails(textarea.value || '') : [];
+                            chips.innerHTML = '';
+                            list.forEach((email, idx)=>{
+                                const span = document.createElement('span');
+                                span.className = 'badge bg-secondary me-1 mb-1';
+                                span.textContent = email;
+                                const rem = document.createElement('button');
+                                rem.type = 'button';
+                                rem.className = 'btn btn-sm btn-close ms-2';
+                                rem.style.padding = '0.15rem 0.35rem';
+                                rem.onclick = ()=>{
+                                    list.splice(idx,1);
+                                    if(textarea) textarea.value = list.join(', ');
+                                    render();
+                                };
+                                span.appendChild(rem);
+                                chips.appendChild(span);
+                            });
+                        }
+
+                        function isValidEmail(email) {
+                            return /^\S+@\S+\.\S+$/.test(email);
+                        }
+
+                        addBtn.addEventListener('click', function(){
+                            const val = input.value.trim();
+                            if(!val) return;
+                            if(!isValidEmail(val)) { alert('Invalid email'); return; }
+                            const current = textarea && textarea.value ? parseEmails(textarea.value) : [];
+                            if(current.includes(val)) { input.value=''; render(); return; }
+                            current.push(val);
+                            if(textarea) textarea.value = current.join(', ');
+                            input.value = '';
+                            render();
+                        });
+
+                        // initialize
+                        document.addEventListener('DOMContentLoaded', render);
+                        // if textarea exists and is changed externally, re-render
+                        if(textarea) textarea.addEventListener('input', render);
+                        // also run immediately in case DOMContentLoaded already fired
+                        render();
+                    })();
+                </script>
             </div>
             {% endif %}
             {% for comment in comments %}
