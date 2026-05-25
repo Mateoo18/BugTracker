@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 
-from infrastructure.models import Bug, BugComment, Company, Team, User
+from infrastructure.models import Bug, BugComment, Company, Team, User, BugAttachment
 
 
 class RegistrationForm(UserCreationForm):
@@ -53,6 +53,31 @@ class BugReportForm(forms.ModelForm):
             "similar_count": "Similar reports",
             "module_importance": "Module importance",
         }
+
+
+class BugAttachmentForm(forms.ModelForm):
+    class Meta:
+        model = Bug._meta.get_field("") if False else None
+
+    # Use a simple form instead of ModelForm to avoid circular import issues
+    image = forms.ImageField(required=True, help_text="PNG or JPG attachment, up to 4 MB.")
+    caption = forms.CharField(required=False, max_length=180)
+
+    def clean_image(self):
+        image = self.cleaned_data.get("image")
+        if image and image.size > 4 * 1024 * 1024:
+            raise forms.ValidationError("Attachment size must be 4 MB or less.")
+        return image
+
+
+class BugNotificationForm(forms.ModelForm):
+    class Meta:
+        model = Bug
+        fields = ("notification_email",)
+
+    def clean_notification_email(self):
+        email = self.cleaned_data.get("notification_email", "").strip()
+        return email
         help_texts = {
             "module": "Examples: Payments, Login, Reports, Notifications.",
             "severity": "Low = cosmetic or minor, Medium = degraded workflow, High = major feature broken, Critical = outage, data loss, or security risk.",
@@ -104,6 +129,7 @@ class PriorityOverrideForm(forms.Form):
 
 
 class BugCommentForm(forms.ModelForm):
+    image = forms.ImageField(required=False, help_text="Optional PNG or JPG attachment, up to 4 MB.")
     class Meta:
         model = BugComment
         fields = ("body", "is_internal")
@@ -187,3 +213,15 @@ class TeamCreateForm(forms.ModelForm):
         if commit:
             team.save()
         return team
+
+
+class BugAttachmentForm(forms.ModelForm):
+    class Meta:
+        model = BugAttachment
+        fields = ("image", "caption")
+
+    def clean_image(self):
+        image = self.cleaned_data.get("image")
+        if image and image.size > 4 * 1024 * 1024:
+            raise forms.ValidationError("Attachment size must be 4 MB or less.")
+        return image

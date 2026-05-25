@@ -29,6 +29,8 @@ from .forms import (
     RegistrationForm,
     StatusChangeForm,
     TeamCreateForm,
+    BugAttachmentForm,
+    BugNotificationForm,
 )
 
 logger = logging.getLogger("bugtracker")
@@ -194,8 +196,17 @@ def public_resolved_bugs(request):
 @login_required
 def bug_detail(request, pk):
     bug = get_object_or_404(_visible_bugs_for(request.user), pk=pk)
+    # handle notification email update
+    if request.method == "POST" and request.POST.get("action") == "notification":
+        form = BugNotificationForm(request.POST, instance=bug)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Notification email updated.")
+        else:
+            messages.error(request, "Could not update notification email.")
+        return redirect(bug)
     if request.method == "POST" and request.POST.get("action") == "comment":
-        form = BugCommentForm(request.POST)
+        form = BugCommentForm(request.POST, request.FILES)
         if form.is_valid():
             comment = form.save(commit=False)
             comment.bug = bug
@@ -203,8 +214,31 @@ def bug_detail(request, pk):
             if comment.is_internal and not is_staff_role(request.user):
                 comment.is_internal = False
             comment.save()
+            # handle optional attachment
+            image = request.FILES.get("image")
+            if image:
+                from infrastructure.models import BugCommentAttachment
+
+                BugCommentAttachment.objects.create(
+                    comment=comment,
+                    uploaded_by=request.user,
+                    image=image,
+                    caption="Comment attachment",
+                )
             messages.success(request, "Comment added.")
             return redirect(bug)
+    if request.method == "POST" and request.POST.get("action") == "attach_bug":
+        # handle attachment upload for existing bug
+        image = request.FILES.get("bug_image")
+        caption = request.POST.get("bug_caption", "")
+        if image:
+            from infrastructure.models import BugAttachment
+
+            BugAttachment.objects.create(bug=bug, uploaded_by=request.user, image=image, caption=caption)
+            messages.success(request, "Attachment uploaded.")
+        else:
+            messages.error(request, "No file uploaded.")
+        return redirect(bug)
     assignment_form = AssignmentForm(company=bug.company)
     status_form = StatusChangeForm(initial={"status": bug.status})
     priority_form = PriorityOverrideForm(initial={"priority": bug.priority})
@@ -222,6 +256,8 @@ def bug_detail(request, pk):
             "assignment_form": assignment_form,
             "status_form": status_form,
             "priority_form": priority_form,
+            "attachment_form": BugAttachmentForm(),
+            "notification_form": BugNotificationForm(instance=bug),
             "can_manage": is_ba_or_admin(request.user),
         },
     )
