@@ -220,15 +220,14 @@ def bug_detail(request, pk):
     if request.method == "POST" and request.POST.get("action") == "attach_bug":
         # handle attachment upload for existing bug
         image = request.FILES.get("bug_image")
-        caption = request.POST.get("bug_caption", "")
         if image:
             from infrastructure.models import BugAttachment, BugComment
 
-            attachment = BugAttachment.objects.create(bug=bug, uploaded_by=request.user, image=image, caption=caption)
+            attachment = BugAttachment.objects.create(bug=bug, uploaded_by=request.user, image=image)
             # create a comment noting the attachment name and extension
             name = attachment.image.name.split("/")[-1]
             comment_text = f"Attachment added: {name}"
-            comment = BugComment.objects.create(bug=bug, author=request.user, body=comment_text, is_internal=False)
+            BugComment.objects.create(bug=bug, author=request.user, body=comment_text, is_internal=False)
             messages.success(request, "Attachment uploaded and comment added.")
         else:
             messages.error(request, "No file uploaded.")
