@@ -98,6 +98,7 @@ class Bug(TimeStampedModel):
     module_importance = models.PositiveSmallIntegerField(default=3, validators=[MinValueValidator(1), MaxValueValidator(5)])
     product = models.CharField(max_length=160)
     notification_email = models.EmailField(blank=True, help_text="Optional email to receive updates about this bug")
+    notification_emails = models.TextField(blank=True, help_text="Optional comma-separated emails to receive updates about this bug")
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="bugs")
     reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reported_bugs")
     duplicate_of = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="duplicates")
@@ -172,10 +173,8 @@ class BugAttachment(TimeStampedModel):
         upload_to="bug_attachments/%Y/%m/%d/",
         validators=[FileExtensionValidator(["png", "jpg", "jpeg"])],
     )
-    caption = models.CharField(max_length=180, blank=True)
-
     def __str__(self) -> str:
-        return self.caption or self.image.name
+        return self.image.name
 
 
 class BugCommentAttachment(TimeStampedModel):
@@ -185,10 +184,8 @@ class BugCommentAttachment(TimeStampedModel):
         upload_to="comment_attachments/%Y/%m/%d/",
         validators=[FileExtensionValidator(["png", "jpg", "jpeg"])],
     )
-    caption = models.CharField(max_length=180, blank=True)
-
     def __str__(self) -> str:
-        return self.caption or (self.image.name if self.image else "")
+        return self.image.name if self.image else ""
 
 
 class BugPriorityHistory(models.Model):

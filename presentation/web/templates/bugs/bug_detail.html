@@ -39,9 +39,8 @@
                 <input type="hidden" name="action" value="attach_bug">
                 <div class="mb-2">
                     <label for="id_bug_image">Add attachment</label>
-                    <input type="file" name="bug_image" id="id_bug_image" accept="image/png,image/jpeg">
+                    <input type="file" name="bug_image" id="id_bug_image">
                 </div>
-                <div class="mb-2"><input type="text" name="bug_caption" placeholder="Caption (optional)" class="form-control"></div>
                 <button class="btn btn-sm btn-outline-primary">Upload</button>
             </form>
             {% if can_manage %}
@@ -49,7 +48,8 @@
                 {% csrf_token %}
                 <input type="hidden" name="action" value="notification">
                 <label class="small">Notification email for updates</label>
-                {{ notification_form.notification_email }}
+                <div class="mb-1">Primary: {{ notification_form.notification_email }}</div>
+                <div class="mb-1">Also notify (comma-separated): {{ notification_form.notification_emails }}</div>
                 <button class="btn btn-sm btn-outline-secondary mt-1">Save</button>
             </form>
             {% endif %}

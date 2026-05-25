@@ -206,7 +206,7 @@ def bug_detail(request, pk):
             messages.error(request, "Could not update notification email.")
         return redirect(bug)
     if request.method == "POST" and request.POST.get("action") == "comment":
-        form = BugCommentForm(request.POST, request.FILES)
+        form = BugCommentForm(request.POST)
         if form.is_valid():
             comment = form.save(commit=False)
             comment.bug = bug
@@ -214,17 +214,7 @@ def bug_detail(request, pk):
             if comment.is_internal and not is_staff_role(request.user):
                 comment.is_internal = False
             comment.save()
-            # handle optional attachment
-            image = request.FILES.get("image")
-            if image:
-                from infrastructure.models import BugCommentAttachment
-
-                BugCommentAttachment.objects.create(
-                    comment=comment,
-                    uploaded_by=request.user,
-                    image=image,
-                    caption="Comment attachment",
-                )
+            messages.success(request, "Comment added.")
             messages.success(request, "Comment added.")
             return redirect(bug)
     if request.method == "POST" and request.POST.get("action") == "attach_bug":
@@ -232,10 +222,14 @@ def bug_detail(request, pk):
         image = request.FILES.get("bug_image")
         caption = request.POST.get("bug_caption", "")
         if image:
-            from infrastructure.models import BugAttachment
+            from infrastructure.models import BugAttachment, BugComment
 
-            BugAttachment.objects.create(bug=bug, uploaded_by=request.user, image=image, caption=caption)
-            messages.success(request, "Attachment uploaded.")
+            attachment = BugAttachment.objects.create(bug=bug, uploaded_by=request.user, image=image, caption=caption)
+            # create a comment noting the attachment name and extension
+            name = attachment.image.name.split("/")[-1]
+            comment_text = f"Attachment added: {name}"
+            comment = BugComment.objects.create(bug=bug, author=request.user, body=comment_text, is_internal=False)
+            messages.success(request, "Attachment uploaded and comment added.")
         else:
             messages.error(request, "No file uploaded.")
         return redirect(bug)
