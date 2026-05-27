@@ -36,6 +36,23 @@ from .forms import (
 logger = logging.getLogger("bugtracker")
 
 
+def _send_bug_notifications(request, bug, subject, body):
+    """Send notification emails to addresses listed on the bug.notification_email field (comma-separated)."""
+    addrs = (bug.notification_email or "").strip()
+    if not addrs:
+        return
+    recipient_list = [a.strip() for a in addrs.split(',') if a.strip()]
+    if not recipient_list:
+        return
+    try:
+        # include a link to the bug
+        url = request.build_absolute_uri(bug.get_absolute_url())
+        full_body = f"{body}\n\nLink: {url}"
+        send_mail(subject, full_body, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False)
+    except Exception:
+        logger.exception("Failed to send bug notification emails for bug %s", bug.pk)
+
+
 class UserLoginView(LoginView):
     template_name = "registration/login.html"
 
@@ -229,6 +246,13 @@ def bug_detail(request, pk):
             comment_text = f"Attachment added: {name}"
             BugComment.objects.create(bug=bug, author=request.user, body=comment_text, is_internal=False)
             messages.success(request, "Attachment uploaded and comment added.")
+            # notify addresses on this ticket about the new attachment
+            try:
+                subject = f"[BugTracker] New attachment on BUG-{bug.pk}: {bug.title}"
+                body = f"{request.user} added an attachment: {name}"
+                _send_bug_notifications(request, bug, subject, body)
+            except Exception:
+                pass
         else:
             messages.error(request, "No file uploaded.")
         return redirect(bug)
