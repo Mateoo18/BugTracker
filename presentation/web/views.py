@@ -36,8 +36,12 @@ from .forms import (
 logger = logging.getLogger("bugtracker")
 
 
-def _send_bug_notifications(request, bug, subject, body):
-    """Send notification emails to addresses listed on the bug.notification_email field (comma-separated)."""
+def _send_bug_notifications(request, bug, subject, plain_body, html_body=None):
+    """Send notification emails to addresses listed on the bug.notification_email field (comma-separated).
+
+    plain_body: fallback plain-text body
+    html_body: optional HTML body (will be used as html_message)
+    """
     addrs = (bug.notification_email or "").strip()
     if not addrs:
         return
@@ -45,10 +49,16 @@ def _send_bug_notifications(request, bug, subject, body):
     if not recipient_list:
         return
     try:
-        # include a link to the bug
+        # include a link to the bug at the end of both bodies
         url = request.build_absolute_uri(bug.get_absolute_url())
-        full_body = f"{body}\n\nLink: {url}"
-        send_mail(subject, full_body, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False)
+        full_plain = f"{plain_body}\n\nView ticket: {url}"
+        full_html = None
+        if html_body:
+            full_html = f"{html_body}<p><a href=\"{url}\">View ticket</a></p>"
+        else:
+            # simple HTML fallback
+            full_html = f"<pre>{plain_body}</pre><p><a href=\"{url}\">View ticket</a></p>"
+        send_mail(subject, full_plain, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False, html_message=full_html)
     except Exception:
         logger.exception("Failed to send bug notification emails for bug %s", bug.pk)
 
@@ -335,6 +345,26 @@ def change_status(request, pk):
             changed_by=request.user,
             note=form.cleaned_data["note"],
         )
+        # send notification about status change
+        try:
+            subject = f"[BugTracker] Status changed for BUG-{bug.pk}: {bug.title}"
+            plain = (
+                f"Ticket: {bug.title}\n"
+                f"Changed by: {request.user.get_full_name() or request.user.username}\n"
+                f"Old status: {form.initial.get('status', 'unknown')}\n"
+                f"New status: {form.cleaned_data['status']}\n"
+                f"Note: {form.cleaned_data.get('note', '')}"
+            )
+            html = (
+                f"<h3>Ticket: {bug.title}</h3>"
+                f"<p>Changed by: {request.user.get_full_name() or request.user.username}</p>"
+                f"<p>Old status: <strong>{form.initial.get('status', 'unknown')}</strong><br>"
+                f"New status: <strong>{form.cleaned_data['status']}</strong></p>"
+                f"<p>Note: {form.cleaned_data.get('note', '')}</p>"
+            )
+            _send_bug_notifications(request, bug, subject, plain, html)
+        except Exception:
+            logger.exception('Failed to notify about status change for bug %s', bug.pk)
         messages.success(request, "Status changed.")
     return redirect(bug)
 
@@ -353,6 +383,23 @@ def override_priority(request, pk):
             changed_by=request.user,
             reason=form.cleaned_data["reason"],
         )
+        try:
+            subject = f"[BugTracker] Priority changed for BUG-{bug.pk}: {bug.title}"
+            plain = (
+                f"Ticket: {bug.title}\n"
+                f"Changed by: {request.user.get_full_name() or request.user.username}\n"
+                f"New priority: {form.cleaned_data['priority']}\n"
+                f"Reason: {form.cleaned_data.get('reason', '')}"
+            )
+            html = (
+                f"<h3>Ticket: {bug.title}</h3>"
+                f"<p>Changed by: {request.user.get_full_name() or request.user.username}</p>"
+                f"<p>New priority: <strong>{form.cleaned_data['priority']}</strong></p>"
+                f"<p>Reason: {form.cleaned_data.get('reason', '')}</p>"
+            )
+            _send_bug_notifications(request, bug, subject, plain, html)
+        except Exception:
+            logger.exception('Failed to notify about priority change for bug %s', bug.pk)
         messages.success(request, "Priority overridden.")
     return redirect(bug)
 
@@ -364,6 +411,22 @@ def recalculate_priority(request, pk):
         messages.error(request, "You do not have permission to recalculate priority.")
         return redirect(bug)
     PriorityService.recalculate(bug, changed_by=request.user, reason="Manual web recalculation")
+    try:
+        subject = f"[BugTracker] Priority recalculated for BUG-{bug.pk}: {bug.title}"
+        plain = (
+            f"Ticket: {bug.title}\n"
+            f"Triggered by: {request.user.get_full_name() or request.user.username}\n"
+            f"New priority: {bug.priority}\n"
+            f"New score: {bug.priority_score}\n"
+        )
+        html = (
+            f"<h3>Ticket: {bug.title}</h3>"
+            f"<p>Triggered by: {request.user.get_full_name() or request.user.username}</p>"
+            f"<p>New priority: <strong>{bug.priority}</strong><br>New score: <strong>{bug.priority_score}</strong></p>"
+        )
+        _send_bug_notifications(request, bug, subject, plain, html)
+    except Exception:
+        logger.exception('Failed to notify about priority recalculation for bug %s', bug.pk)
     messages.success(request, "Priority recalculated.")
     return redirect(bug)
 
