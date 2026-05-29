@@ -242,6 +242,24 @@ def bug_detail(request, pk):
                 comment.is_internal = False
             comment.save()
             messages.success(request, "Comment added.")
+            # send notification about new comment
+            try:
+                subject = f"[BugTracker] New comment on BUG-{bug.pk}: {bug.title}"
+                author_name = request.user.get_full_name() or request.user.username
+                plain = (
+                    f"Ticket: {bug.title}\n"
+                    f"Comment by: {author_name}\n"
+                    f"Timestamp: {comment.created_at}\n\n"
+                    f"{comment.body}\n"
+                )
+                html = (
+                    f"<h3>Ticket: {bug.title}</h3>"
+                    f"<p>Comment by: {author_name} — {comment.created_at}</p>"
+                    f"<div style=\"white-space:pre-wrap;border:1px solid #ddd;padding:8px;background:#f9f9f9;\">{comment.body}</div>"
+                )
+                _send_bug_notifications(request, bug, subject, plain, html)
+            except Exception:
+                logger.exception('Failed to send comment notification for bug %s', bug.pk)
             # attachment upload via comment was removed; attachments should be added via the Attachments section
             return redirect(bug)
     if request.method == "POST" and request.POST.get("action") == "attach_bug":
