@@ -2,21 +2,19 @@ import logging
 import secrets
 import string
 
+from application.services import BugService, BugWorkflowService, PriorityService
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.views import LoginView
-from django.core.paginator import Paginator
 from django.core.mail import send_mail
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
-from django.conf import settings
 from django.views.generic import CreateView
-
-from application.services import BugService, BugWorkflowService, PriorityService
 from infrastructure.models import Bug, User
 from shared_kernel.roles import is_ba_or_admin, is_staff_role
 
@@ -96,7 +94,7 @@ def _visible_bugs_for(user):
     if user.role == "admin":
         return Bug.objects.all()
     if user.role in {"developer", "po", "ba"} and user.company_id:
-        return Bug.objects.filter(company=user.company)
+        return Bug.objects.filter(Q(company=user.company) | Q(status__in=["resolved", "verified", "closed"]))
     return Bug.objects.filter(Q(reporter=user) | Q(status__in=["resolved", "verified", "closed"]))
 
 
@@ -132,11 +130,7 @@ def _applied_filters(request, *, include_status=True):
     allowed = ["q", "priority", "severity"]
     if include_status:
         allowed.insert(1, "status")
-    return [
-        {"label": labels[key], "value": request.GET.get(key)}
-        for key in allowed
-        if request.GET.get(key)
-    ]
+    return [{"label": labels[key], "value": request.GET.get(key)} for key in allowed if request.GET.get(key)]
 
 
 @login_required
@@ -465,12 +459,7 @@ def developer_create(request):
                 send_mail(
                     subject="Your BugTracker developer account",
                     message=(
-                        f"Hello {developer.first_name},\n\n"
-                        f"A developer account has been created for you in BugTracker.\n\n"
-                        f"Username: {developer.username}\n"
-                        f"Temporary password: {temporary_password}\n"
-                        f"Login page: {login_url}\n\n"
-                        "After logging in, you will be asked to set your own password."
+                        f"Hello {developer.first_name},\n\nA developer account has been created for you in BugTracker.\n\nUsername: {developer.username}\nTemporary password: {temporary_password}\nLogin page: {login_url}\n\nAfter logging in, you will be asked to set your own password."
                     ),
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[developer.email],
