@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+{% load bug_filters %}
+
+{% block title %}Kanban Board - BugTracker{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Kanban Board</h2>
+    {% if can_manage %}
+    <span class="badge bg-info text-dark">Drag & Drop Enabled</span>
+    {% endif %}
+</div>
+
+<form class="card p-3 mb-4 shadow-sm" method="get">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label small fw-bold text-muted">Search (title, description, module, product)</label>
+            <input type="text" name="q" class="form-control" placeholder="Enter keywords... "value="{{ request.GET.q }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold text-muted">Priority</label>
+            <select name="priority" class="form-select">
+                <option value="">Any Priority</option>
+                {% for p_val, p_label in priority_choices %}
+                <option value="{{ p_val }}" {% if request.GET.priority == p_val %}selected{% endif %}>{{ p_label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold text-muted">Severity</label>
+            <select name="severity" class="form-select">
+                <option value="">Any Severity</option>
+                {% for s_val, s_label in severity_choices %}
+                <option value="{{ s_val }}" {% if request.GET.severity == s_val %}selected{% endif %}>{{ s_label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary w-100">Filter</button>
+            <a href="{% url 'web:kanban_board' %}" class="btn btn-outline-secondary">Clear</a>
+        </div>
+    </div>
+</form>
+
+{% if applied_filters %}
+<div class="mb-3">
+    <span class="text-muted small me-2">Active filters:</span>
+    {% for filter in applied_filters %}
+    <span class="badge bg-secondary">{{ filter.label }}: {{ filter.value }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="kanban-container d-flex gap-3 overflow-auto pb-3" style="min-height: 600px;">
+    {% for status_val, status_label in status_choices %}
+    <div class="kanban-column bg-light rounded shadow-sm p-2" data-status="{{ status_val }}"
+        style="min-width: 320px; max-width: 320px;">
+        <h5 class="text-center py-2 mb-3 border-bottom text-muted fw-bold">
+            {{ status_label }}
+            <span class="badge bg-secondary ms-1 kanban-count">{{ bugs_by_status|get_item:status_val|length|default:"0" }}</span>
+        </h5>
+
+        <div class="kanban-cards d-flex flex-column gap-2" style="min-height: 100%;">
+            {% for bug in bugs_by_status|get_item:status_val %}
+            <div class="card kanban-card shadow-sm border-0 {% if can_manage %}cursor-grab{% endif %}"
+                data-bug-id="{{ bug.pk }}" {% if can_manage %}draggable="true" {% endif %}>
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge priority-{{ bug.priority }}">{{ bug.priority }}</span>
+                        <small class="text-muted" title="{{ bug.created_at|date:'Y-m-d H:i' }}">{{bug.created_at|timesince }} ago</small>
+                    </div>
+                    <h6 class="card-title mb-1">
+                        <a href="{{ bug.get_absolute_url }}" class="text-decoration-none text-dark fw-bold">
+                            BUG-{{ bug.pk }}: {{ bug.title|truncatechars:50 }}
+                        </a>
+                    </h6>
+                    <div class="small text-muted mb-2">
+                        <i class="fa-solid fa-cube me-1"></i> {{ bug.module|truncatechars:20 }}
+                        <span class="mx-1">&middot;</span>
+                        <i class="fa-solid fa-building me-1"></i> {{ bug.company.name|truncatechars:20 }}
+                    </div>
+
+                    {% with assignment=bug.assignments.first %}
+                    {% if assignment and assignment.is_active and assignment.assignee %}
+                    <div class="d-flex align-items-center mt-3">
+                        <div class="rounded-circle bg-secondary text-white d-flex justify-content-center align-items-center me-2"
+                            style="width: 24px; height: 24px; font-size: 10px;"
+                            title="Assigned to: {{ assignment.assignee.get_full_name | default:assignment.assignee.username }}">
+                            {{ assignment.assignee.username|make_list|first|upper }}
+                        </div>
+                        <small class="text-muted text-truncate">{{assignment.assignee.get_full_name|default:assignment.assignee.username }}</small>
+                    </div>
+                    {% elif assignment and assignment.is_active and assignment.team %}
+                    <div class="d-flex align-items-center mt-3">
+                        <i class="fa-solid fa-users text-muted me-2"
+                            title="Assigned to team: {{ assignment.team.name }}"></i>
+                        <small class="text-muted text-truncate">{{ assignment.team.name }}</small>
+                    </div>
+                    {% else %}
+                    <div class="mt-3 text-muted small fst-italic">Unassigned</div>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+            {% empty %}
+            <div
+                class="kanban-empty text-center text-muted small py-4 {% if bugs_by_status|get_item:status_val %}d-none{% endif %}">
+                No bugs
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .kanban-container {
+        scroll-behavior: smooth;
+    }
+
+    .kanban-column {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .kanban-cards {
+        flex: 1;
+        border-radius: 4px;
+        padding-bottom: 20px;
+        transition: background-color 0.2s;
+    }
+
+    .kanban-cards.drag-over {
+        background-color: #e9ecef;
+        border: 2px dashed #adb5bd;
+    }
+
+    .kanban-card {
+        transition: transform 0.1s, box-shadow 0.1s;
+        border: 1px solid rgba(0, 0, 0, .125) !important;
+    }
+
+    .kanban-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15) !important;
+    }
+
+    .cursor-grab {
+        cursor: grab;
+    }
+
+    .cursor-grab:active {
+        cursor: grabbing;
+    }
+
+    .dragging {
+        opacity: 0.5;
+    }
+</style>
+
+{% if can_manage %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const cards = document.querySelectorAll('.kanban-card');
+        const columns = document.querySelectorAll('.kanban-cards');
+
+        // CSRF token setup for API requests
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        cards.forEach(card => {
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', card.dataset.bugId);
+                setTimeout(() => card.classList.add('dragging'), 0);
+            });
+
+            card.addEventListener('dragend', () => {
+                card.classList.remove('dragging');
+            });
+        });
+
+        columns.forEach(column => {
+            column.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                column.classList.add('drag-over');
+            });
+
+            column.addEventListener('dragleave', () => {
+                column.classList.remove('drag-over');
+            });
+
+            column.addEventListener('drop', (e) => {
+                e.preventDefault();
+                column.classList.remove('drag-over');
+
+                const bugId = e.dataTransfer.getData('text/plain');
+                const draggedCard = document.querySelector(`.kanban-card[data-bug-id="${bugId}"]`);
+
+                if (draggedCard) {
+                    const targetColumnDiv = column.closest('.kanban-column');
+                    const newStatus = targetColumnDiv.dataset.status;
+                    const sourceColumnDiv = draggedCard.closest('.kanban-column');
+                    const oldStatus = sourceColumnDiv.dataset.status;
+
+                    if (newStatus !== oldStatus) {
+                        // Optymistyczny update UI
+                        column.appendChild(draggedCard);
+                        updateCounts();
+
+                        // Wywołanie API do zmiany statusu
+                        fetch(`/api/bugs/${bugId}/status/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrftoken
+                            },
+                            body: JSON.stringify({
+                                status: newStatus,
+                                note: 'Status changed via Kanban board'
+                            })
+                        })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error('Network response was not ok');
+                                }
+                                return response.json();
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                // Cofnięcie zmian w przypadku błędu
+                                sourceColumnDiv.querySelector('.kanban-cards').appendChild(draggedCard);
+                                updateCounts();
+                                alert('Failed to change status. Please try again.');
+                            });
+                    }
+                }
+            });
+        });
+
+        function updateCounts() {
+            document.querySelectorAll('.kanban-column').forEach(col => {
+                const count = col.querySelectorAll('.kanban-card').length;
+                col.querySelector('.kanban-count').textContent = count;
+
+                const emptyMsg = col.querySelector('.kanban-empty');
+                if (emptyMsg) {
+                    if (count > 0) emptyMsg.classList.add('d-none');
+                    else emptyMsg.classList.remove('d-none');
+                }
+            });
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

@@ -17,6 +17,7 @@ urlpatterns = [
     path("dashboard/teams/new/", views.team_create, name="team_create"),
     path("password/change-required/", views.force_password_change, name="force_password_change"),
     path("bugs/", views.bug_list, name="bug_list"),
+    path("bugs/kanban/", views.kanban_board, name="kanban_board"),
     path("bugs/new/", views.bug_create, name="bug_create"),
     path("bugs/public-resolved/", views.public_resolved_bugs, name="public_resolved_bugs"),
     path("bugs/<int:pk>/", views.bug_detail, name="bug_detail"),

@@ -15,7 +15,9 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import CreateView
-from infrastructure.models import Bug, User
+
+from application.services import BugService, BugWorkflowService, PriorityService
+from infrastructure.models import Bug, User, Team
 from shared_kernel.roles import is_ba_or_admin, is_staff_role
 
 from .forms import (
@@ -212,6 +214,78 @@ def public_resolved_bugs(request):
             "applied_filters": _applied_filters(request, include_status=False),
         },
     )
+
+
+@login_required
+def kanban_board(request):
+    """Display kanban board with bugs grouped by status."""
+    # Get visible bugs for user (respects company scoping)
+    bugs = _visible_bugs_for(request.user).select_related("company", "reporter").prefetch_related("assignments")
+    
+    # Apply filters from GET parameters
+    priority = request.GET.get("priority", "").strip()
+    severity = request.GET.get("severity", "").strip()
+    search = request.GET.get("q", "").strip()
+    assignee_id = request.GET.get("assignee_id", "").strip()
+    team_id = request.GET.get("team_id", "").strip()
+    
+    if search:
+        bugs = bugs.filter(
+            Q(title__icontains=search)
+            | Q(description__icontains=search)
+            | Q(module__icontains=search)
+            | Q(product__icontains=search)
+            | Q(company__name__icontains=search)
+        )
+    if priority:
+        bugs = bugs.filter(priority=priority)
+    if severity:
+        bugs = bugs.filter(severity=severity)
+    if assignee_id:
+        bugs = bugs.filter(assignments__assignee_id=assignee_id, assignments__is_active=True)
+    if team_id:
+        bugs = bugs.filter(assignments__team_id=team_id, assignments__is_active=True)
+    
+    # Group bugs by status - convert querysets to lists
+    bugs_by_status = {}
+    for status_val, status_label in Bug.Status.choices:
+        bugs_by_status[status_val] = list(bugs.filter(status=status_val))
+    
+    # Get available users and teams for filter dropdowns
+    # For company-scoped access, only show users/teams from the same company
+    if request.user.company_id:
+        available_users = User.objects.filter(company=request.user.company)
+        available_teams = Team.objects.filter(company=request.user.company)
+    else:
+        # For non-company users, show only relevant users/teams
+        available_users = User.objects.filter(is_active=True)
+        available_teams = Team.objects.none()
+    
+    # Build applied filters list for display
+    applied_filters = []
+    filter_labels = {
+        "q": "Search",
+        "priority": "Priority",
+        "severity": "Severity",
+        "assignee_id": "Assignee",
+        "team_id": "Team",
+    }
+    for key in ["q", "priority", "severity", "assignee_id", "team_id"]:
+        if request.GET.get(key):
+            applied_filters.append({"label": filter_labels[key], "value": request.GET.get(key)})
+    
+    context = {
+        "bugs_by_status": bugs_by_status,
+        "can_manage": is_ba_or_admin(request.user),
+        "status_choices": Bug.Status.choices,
+        "priority_choices": Bug.Priority.choices,
+        "severity_choices": Bug.Severity.choices,
+        "applied_filters": applied_filters,
+        "available_users": available_users,
+        "available_teams": available_teams,
+    }
+    
+    return render(request, "bugs/kanban_board.html", context)
 
 
 @login_required
