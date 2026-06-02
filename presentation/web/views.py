@@ -2,18 +2,18 @@ import logging
 import secrets
 import string
 
+from application.services import BugService, BugWorkflowService, PriorityService
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.views import LoginView
-from django.core.paginator import Paginator
 from django.core.mail import send_mail
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
-from django.conf import settings
 from django.views.generic import CreateView
 
 from application.services import BugService, BugWorkflowService, PriorityService
@@ -29,9 +29,38 @@ from .forms import (
     RegistrationForm,
     StatusChangeForm,
     TeamCreateForm,
+    BugAttachmentForm,
+    BugNotificationForm,
 )
 
 logger = logging.getLogger("bugtracker")
+
+
+def _send_bug_notifications(request, bug, subject, plain_body, html_body=None):
+    """Send notification emails to addresses listed on the bug.notification_email field (comma-separated).
+
+    plain_body: fallback plain-text body
+    html_body: optional HTML body (will be used as html_message)
+    """
+    addrs = (bug.notification_email or "").strip()
+    if not addrs:
+        return
+    recipient_list = [a.strip() for a in addrs.split(',') if a.strip()]
+    if not recipient_list:
+        return
+    try:
+        # include a link to the bug at the end of both bodies
+        url = request.build_absolute_uri(bug.get_absolute_url())
+        full_plain = f"{plain_body}\n\nView ticket: {url}"
+        full_html = None
+        if html_body:
+            full_html = f"{html_body}<p><a href=\"{url}\">View ticket</a></p>"
+        else:
+            # simple HTML fallback
+            full_html = f"<pre>{plain_body}</pre><p><a href=\"{url}\">View ticket</a></p>"
+        send_mail(subject, full_plain, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False, html_message=full_html)
+    except Exception:
+        logger.exception("Failed to send bug notification emails for bug %s", bug.pk)
 
 
 class UserLoginView(LoginView):
@@ -67,7 +96,7 @@ def _visible_bugs_for(user):
     if user.role == "admin":
         return Bug.objects.all()
     if user.role in {"developer", "po", "ba"} and user.company_id:
-        return Bug.objects.filter(company=user.company)
+        return Bug.objects.filter(Q(company=user.company) | Q(status__in=["resolved", "verified", "closed"]))
     return Bug.objects.filter(Q(reporter=user) | Q(status__in=["resolved", "verified", "closed"]))
 
 
@@ -103,11 +132,7 @@ def _applied_filters(request, *, include_status=True):
     allowed = ["q", "priority", "severity"]
     if include_status:
         allowed.insert(1, "status")
-    return [
-        {"label": labels[key], "value": request.GET.get(key)}
-        for key in allowed
-        if request.GET.get(key)
-    ]
+    return [{"label": labels[key], "value": request.GET.get(key)} for key in allowed if request.GET.get(key)]
 
 
 @login_required
@@ -266,6 +291,15 @@ def kanban_board(request):
 @login_required
 def bug_detail(request, pk):
     bug = get_object_or_404(_visible_bugs_for(request.user), pk=pk)
+    # handle notification email update
+    if request.method == "POST" and request.POST.get("action") == "notification":
+        form = BugNotificationForm(request.POST, instance=bug)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Notification email updated.")
+        else:
+            messages.error(request, "Could not update notification email.")
+        return redirect(bug)
     if request.method == "POST" and request.POST.get("action") == "comment":
         form = BugCommentForm(request.POST)
         if form.is_valid():
@@ -276,7 +310,48 @@ def bug_detail(request, pk):
                 comment.is_internal = False
             comment.save()
             messages.success(request, "Comment added.")
+            # send notification about new comment
+            try:
+                subject = f"[BugTracker] New comment on BUG-{bug.pk}: {bug.title}"
+                author_name = request.user.get_full_name() or request.user.username
+                plain = (
+                    f"Ticket: {bug.title}\n"
+                    f"Comment by: {author_name}\n"
+                    f"Timestamp: {comment.created_at}\n\n"
+                    f"{comment.body}\n"
+                )
+                html = (
+                    f"<h3>Ticket: {bug.title}</h3>"
+                    f"<p>Comment by: {author_name} — {comment.created_at}</p>"
+                    f"<div style=\"white-space:pre-wrap;border:1px solid #ddd;padding:8px;background:#f9f9f9;\">{comment.body}</div>"
+                )
+                _send_bug_notifications(request, bug, subject, plain, html)
+            except Exception:
+                logger.exception('Failed to send comment notification for bug %s', bug.pk)
+            # attachment upload via comment was removed; attachments should be added via the Attachments section
             return redirect(bug)
+    if request.method == "POST" and request.POST.get("action") == "attach_bug":
+        # handle attachment upload for existing bug
+        image = request.FILES.get("bug_image")
+        if image:
+            from infrastructure.models import BugAttachment, BugComment
+
+            attachment = BugAttachment.objects.create(bug=bug, uploaded_by=request.user, image=image)
+            # create a comment noting the attachment name and extension
+            name = attachment.image.name.split("/")[-1]
+            comment_text = f"Attachment added: {name}"
+            BugComment.objects.create(bug=bug, author=request.user, body=comment_text, is_internal=False)
+            messages.success(request, "Attachment uploaded and comment added.")
+            # notify addresses on this ticket about the new attachment
+            try:
+                subject = f"[BugTracker] New attachment on BUG-{bug.pk}: {bug.title}"
+                body = f"{request.user} added an attachment: {name}"
+                _send_bug_notifications(request, bug, subject, body)
+            except Exception:
+                pass
+        else:
+            messages.error(request, "No file uploaded.")
+        return redirect(bug)
     assignment_form = AssignmentForm(company=bug.company)
     status_form = StatusChangeForm(initial={"status": bug.status})
     priority_form = PriorityOverrideForm(initial={"priority": bug.priority})
@@ -294,6 +369,8 @@ def bug_detail(request, pk):
             "assignment_form": assignment_form,
             "status_form": status_form,
             "priority_form": priority_form,
+            "attachment_form": BugAttachmentForm(),
+            "notification_form": BugNotificationForm(instance=bug),
             "can_manage": is_ba_or_admin(request.user),
         },
     )
@@ -354,6 +431,26 @@ def change_status(request, pk):
             changed_by=request.user,
             note=form.cleaned_data["note"],
         )
+        # send notification about status change
+        try:
+            subject = f"[BugTracker] Status changed for BUG-{bug.pk}: {bug.title}"
+            plain = (
+                f"Ticket: {bug.title}\n"
+                f"Changed by: {request.user.get_full_name() or request.user.username}\n"
+                f"Old status: {form.initial.get('status', 'unknown')}\n"
+                f"New status: {form.cleaned_data['status']}\n"
+                f"Note: {form.cleaned_data.get('note', '')}"
+            )
+            html = (
+                f"<h3>Ticket: {bug.title}</h3>"
+                f"<p>Changed by: {request.user.get_full_name() or request.user.username}</p>"
+                f"<p>Old status: <strong>{form.initial.get('status', 'unknown')}</strong><br>"
+                f"New status: <strong>{form.cleaned_data['status']}</strong></p>"
+                f"<p>Note: {form.cleaned_data.get('note', '')}</p>"
+            )
+            _send_bug_notifications(request, bug, subject, plain, html)
+        except Exception:
+            logger.exception('Failed to notify about status change for bug %s', bug.pk)
         messages.success(request, "Status changed.")
     return redirect(bug)
 
@@ -372,6 +469,23 @@ def override_priority(request, pk):
             changed_by=request.user,
             reason=form.cleaned_data["reason"],
         )
+        try:
+            subject = f"[BugTracker] Priority changed for BUG-{bug.pk}: {bug.title}"
+            plain = (
+                f"Ticket: {bug.title}\n"
+                f"Changed by: {request.user.get_full_name() or request.user.username}\n"
+                f"New priority: {form.cleaned_data['priority']}\n"
+                f"Reason: {form.cleaned_data.get('reason', '')}"
+            )
+            html = (
+                f"<h3>Ticket: {bug.title}</h3>"
+                f"<p>Changed by: {request.user.get_full_name() or request.user.username}</p>"
+                f"<p>New priority: <strong>{form.cleaned_data['priority']}</strong></p>"
+                f"<p>Reason: {form.cleaned_data.get('reason', '')}</p>"
+            )
+            _send_bug_notifications(request, bug, subject, plain, html)
+        except Exception:
+            logger.exception('Failed to notify about priority change for bug %s', bug.pk)
         messages.success(request, "Priority overridden.")
     return redirect(bug)
 
@@ -383,6 +497,22 @@ def recalculate_priority(request, pk):
         messages.error(request, "You do not have permission to recalculate priority.")
         return redirect(bug)
     PriorityService.recalculate(bug, changed_by=request.user, reason="Manual web recalculation")
+    try:
+        subject = f"[BugTracker] Priority recalculated for BUG-{bug.pk}: {bug.title}"
+        plain = (
+            f"Ticket: {bug.title}\n"
+            f"Triggered by: {request.user.get_full_name() or request.user.username}\n"
+            f"New priority: {bug.priority}\n"
+            f"New score: {bug.priority_score}\n"
+        )
+        html = (
+            f"<h3>Ticket: {bug.title}</h3>"
+            f"<p>Triggered by: {request.user.get_full_name() or request.user.username}</p>"
+            f"<p>New priority: <strong>{bug.priority}</strong><br>New score: <strong>{bug.priority_score}</strong></p>"
+        )
+        _send_bug_notifications(request, bug, subject, plain, html)
+    except Exception:
+        logger.exception('Failed to notify about priority recalculation for bug %s', bug.pk)
     messages.success(request, "Priority recalculated.")
     return redirect(bug)
 
@@ -403,12 +533,7 @@ def developer_create(request):
                 send_mail(
                     subject="Your BugTracker developer account",
                     message=(
-                        f"Hello {developer.first_name},\n\n"
-                        f"A developer account has been created for you in BugTracker.\n\n"
-                        f"Username: {developer.username}\n"
-                        f"Temporary password: {temporary_password}\n"
-                        f"Login page: {login_url}\n\n"
-                        "After logging in, you will be asked to set your own password."
+                        f"Hello {developer.first_name},\n\nA developer account has been created for you in BugTracker.\n\nUsername: {developer.username}\nTemporary password: {temporary_password}\nLogin page: {login_url}\n\nAfter logging in, you will be asked to set your own password."
                     ),
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[developer.email],

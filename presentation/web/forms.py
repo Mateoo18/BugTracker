@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 
-from infrastructure.models import Bug, BugComment, Company, Team, User
+from infrastructure.models import Bug, BugComment, Company, Team, User, BugAttachment
 
 
 class RegistrationForm(UserCreationForm):
@@ -53,6 +53,26 @@ class BugReportForm(forms.ModelForm):
             "similar_count": "Similar reports",
             "module_importance": "Module importance",
         }
+
+
+class BugNotificationForm(forms.ModelForm):
+    notification_email = forms.CharField(
+        required=False,
+        label="Ticket notification list",
+        widget=forms.Textarea(attrs={"rows": 2, "class": "form-control", "placeholder": "email1@example.com, email2@example.com"}),
+        help_text="Comma-separated emails that will receive ticket updates",
+    )
+
+    class Meta:
+        model = Bug
+        fields = ("notification_email",)
+
+    def clean_notification_email(self):
+        email = self.cleaned_data.get("notification_email", "").strip()
+        return email
+
+    def clean_notification_emails(self):
+        return ''
         help_texts = {
             "module": "Examples: Payments, Login, Reports, Notifications.",
             "severity": "Low = cosmetic or minor, Medium = degraded workflow, High = major feature broken, Critical = outage, data loss, or security risk.",
@@ -187,3 +207,15 @@ class TeamCreateForm(forms.ModelForm):
         if commit:
             team.save()
         return team
+
+
+class BugAttachmentForm(forms.ModelForm):
+    class Meta:
+        model = BugAttachment
+        fields = ("image",)
+
+    def clean_image(self):
+        image = self.cleaned_data.get("image")
+        if image and image.size > 4 * 1024 * 1024:
+            raise forms.ValidationError("Attachment size must be 4 MB or less.")
+        return image

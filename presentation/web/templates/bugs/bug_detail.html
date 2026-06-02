@@ -33,25 +33,132 @@
             {% empty %}
                 <p class="text-muted mb-0">No attachments.</p>
             {% endfor %}
+            <hr>
+            <form method="post" enctype="multipart/form-data" class="mt-2" action="">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="attach_bug">
+                <div class="mb-2">
+                    <label for="id_bug_image">Add attachment</label>
+                    <div class="input-group">
+                        <button type="button" id="choose_file_btn" class="btn btn-sm btn-outline-secondary">Choose file</button>
+                        <span id="chosen_file_name" class="form-control form-control-sm">No file chosen</span>
+                    </div>
+                    <input type="file" name="bug_image" id="id_bug_image" style="display:none">
+                    <script>
+                        (function(){
+                            const btn = document.getElementById('choose_file_btn');
+                            const input = document.getElementById('id_bug_image');
+                            const nameSpan = document.getElementById('chosen_file_name');
+                            btn.addEventListener('click', ()=> input.click());
+                            input.addEventListener('change', ()=>{
+                                const f = input.files && input.files[0];
+                                nameSpan.textContent = f ? f.name : 'No file chosen';
+                            });
+                        })();
+                    </script>
+                </div>
+                <button class="btn btn-sm btn-outline-primary">Upload</button>
+            </form>
+
         </div>
         <div class="panel p-3">
             <div class="d-flex justify-content-between align-items-center">
                 <h2 class="h5 mb-0">Comments</h2>
                 <span class="small text-muted">Internal notes are visible only to company staff.</span>
             </div>
+            {% if can_manage %}
+            <div class="mb-3 mt-2">
+                <label class="form-label">Ticket notification list</label>
+                <form method="post" class="">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="notification">
+                    <div class="d-flex gap-2 mb-2">
+                        <input id="notif_email_input" type="email" class="form-control form-control-sm" placeholder="enter email address and click Add">
+                        <button id="notif_add_btn" type="button" class="btn btn-sm btn-outline-primary">Add</button>
+                    </div>
+                    <div id="notif_chips" class="mb-2"></div>
+                    <div style="display:none">{{ notification_form.notification_email }}</div>
+                    <div class="mt-2"><button class="btn btn-sm btn-outline-secondary">Save</button></div>
+                </form>
+                <script>
+                    (function(){
+                        const form = document.currentScript.parentElement.querySelector('form');
+                        const addBtn = document.getElementById('notif_add_btn');
+                        const input = document.getElementById('notif_email_input');
+                        const chips = document.getElementById('notif_chips');
+                        const textarea = form.querySelector('textarea') || form.querySelector('[name="notification_email"]');
+
+                        function parseEmails(val) {
+                            return val.split(',').map(s=>s.trim()).filter(Boolean);
+                        }
+
+                        function render() {
+                            const list = textarea ? parseEmails(textarea.value || '') : [];
+                            chips.innerHTML = '';
+                            list.forEach((email, idx)=>{
+                                const span = document.createElement('span');
+                                span.className = 'badge bg-secondary me-1 mb-1';
+                                span.textContent = email;
+                                const rem = document.createElement('button');
+                                rem.type = 'button';
+                                rem.className = 'btn btn-sm btn-close ms-2';
+                                rem.style.padding = '0.15rem 0.35rem';
+                                rem.onclick = ()=>{
+                                    list.splice(idx,1);
+                                    if(textarea) textarea.value = list.join(', ');
+                                    render();
+                                };
+                                span.appendChild(rem);
+                                chips.appendChild(span);
+                            });
+                        }
+
+                        function isValidEmail(email) {
+                            return /^\S+@\S+\.\S+$/.test(email);
+                        }
+
+                        addBtn.addEventListener('click', function(){
+                            const val = input.value.trim();
+                            if(!val) return;
+                            if(!isValidEmail(val)) { alert('Invalid email'); return; }
+                            const current = textarea && textarea.value ? parseEmails(textarea.value) : [];
+                            if(current.includes(val)) { input.value=''; render(); return; }
+                            current.push(val);
+                            if(textarea) textarea.value = current.join(', ');
+                            input.value = '';
+                            render();
+                        });
+
+                        // initialize
+                        document.addEventListener('DOMContentLoaded', render);
+                        // if textarea exists and is changed externally, re-render
+                        if(textarea) textarea.addEventListener('input', render);
+                        // also run immediately in case DOMContentLoaded already fired
+                        render();
+                    })();
+                </script>
+            </div>
+            {% endif %}
             {% for comment in comments %}
                 <div class="border-bottom py-2">
                     <div class="small text-muted">{{ comment.author }} - {{ comment.created_at }}{% if comment.is_internal %} - internal note{% endif %}</div>
                     {{ comment.body|linebreaks }}
+                    {% for att in comment.attachments.all %}
+                        <div class="mt-2">
+                            <img class="img-fluid rounded" src="{{ att.image.url }}" alt="{{ att.caption }}">
+                            <div class="small text-muted">{{ att.caption }}</div>
+                        </div>
+                    {% endfor %}
                 </div>
             {% empty %}
                 <p class="text-muted mt-3">No comments yet.</p>
             {% endfor %}
-            <form method="post" class="mt-3 border rounded p-3 bg-light">
+            <form method="post" class="mt-3 border rounded p-3 bg-light" enctype="multipart/form-data">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="comment">
                 <h3 class="h6">Add a comment</h3>
                 {{ comment_form.as_p }}
+                {# Removed direct attachment upload in comment form per UX request #}
                 <button class="btn btn-outline-primary"><i class="fa-solid fa-comment"></i> Post comment</button>
             </form>
         </div>
