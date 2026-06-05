@@ -125,13 +125,14 @@
                     <li class="nav-item"><a
                             class="nav-link {% if request.resolver_match.url_name == 'kanban_board' %}active{% endif %}"
                             href="{% url 'web:kanban_board' %}">Kanban</a></li>
+                    {% if user.role == 'reporter' or user.role == 'admin' %}
                     <li class="nav-item"><a
                             class="nav-link {% if request.resolver_match.url_name == 'bug_create' %}active{% endif %}"
                             href="{% url 'web:bug_create' %}">Report a bug</a></li>
+                    {% endif %}
                     <li class="nav-item"><a
                             class="nav-link {% if request.resolver_match.url_name == 'public_resolved_bugs' %}active{% endif %}"
                             href="{% url 'web:public_resolved_bugs' %}">Resolved board</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/api/">API</a></li>
                     {% if user.is_staff %}
                     <li class="nav-item"><a class="nav-link" href="/admin/">Admin</a></li>
                     {% endif%}

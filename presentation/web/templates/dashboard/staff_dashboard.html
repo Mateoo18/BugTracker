@@ -21,8 +21,8 @@
             {% include "bugs/partials/bug_table.html" with bugs=assigned_bugs %}
         </div>
         <div class="panel p-3">
-            <h2 class="h5">Assigned to my teams</h2>
-            {% include "bugs/partials/bug_table.html" with bugs=team_bugs %}
+            <h2 class="h5">Company bugs</h2>
+            {% include "bugs/partials/bug_table.html" with bugs=company_bugs %}
         </div>
     </div>
     <div class="col-lg-4">
@@ -31,8 +31,8 @@
             <canvas id="companyChart" height="220"></canvas>
         </div>
         <div class="panel p-3">
-            <h2 class="h5">Company bugs</h2>
-            {% include "bugs/partials/compact_bug_list.html" with bugs=company_bugs %}
+            <h2 class="h5">Assigned to my teams</h2>
+            {% include "bugs/partials/compact_bug_list.html" with bugs=team_bugs %}
         </div>
     </div>
 </div>

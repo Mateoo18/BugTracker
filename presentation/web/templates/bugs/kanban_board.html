@@ -5,7 +5,13 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">Kanban Board</h2>
+    <div>
+        <h2 class="mb-0">Team Kanban Board</h2>
+        <p class="text-muted mb-0 small">
+            This board shows bugs assigned to you, bugs assigned to your teams, and bugs reported by you.
+            Use the company bug list for the full company-wide view.
+        </p>
+    </div>
     {% if can_manage %}
     <span class="badge bg-info text-dark">Drag & Drop Enabled</span>
     {% endif %}

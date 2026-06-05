@@ -96,8 +96,25 @@ def _visible_bugs_for(user):
     if user.role == "admin":
         return Bug.objects.all()
     if user.role in {"developer", "po", "ba"} and user.company_id:
-        return Bug.objects.filter(Q(company=user.company) | Q(status__in=["resolved", "verified", "closed"]))
+        return Bug.objects.filter(company=user.company)
     return Bug.objects.filter(Q(reporter=user) | Q(status__in=["resolved", "verified", "closed"]))
+
+
+def _kanban_visible_bugs_for(user):
+    if user.role == "admin":
+        return Bug.objects.all()
+
+    user_team_ids = list(user.teams.values_list("id", flat=True))
+    visibility = Q(reporter=user) | Q(assignments__is_active=True, assignments__assignee=user)
+
+    if user_team_ids:
+        visibility |= Q(assignments__is_active=True, assignments__team_id__in=user_team_ids)
+
+    return Bug.objects.filter(visibility).distinct()
+
+
+def _can_report_bug(user):
+    return user.role in {"reporter", "admin"}
 
 
 def _apply_bug_filters(queryset, request, *, allow_status=True):
@@ -219,8 +236,8 @@ def public_resolved_bugs(request):
 @login_required
 def kanban_board(request):
     """Display kanban board with bugs grouped by status."""
-    # Get visible bugs for user (respects company scoping)
-    bugs = _visible_bugs_for(request.user).select_related("company", "reporter").prefetch_related("assignments")
+    # Kanban is team-scoped: resolved bugs are not public here.
+    bugs = _kanban_visible_bugs_for(request.user).select_related("company", "reporter").prefetch_related("assignments")
     
     # Apply filters from GET parameters
     priority = request.GET.get("priority", "").strip()
@@ -253,12 +270,19 @@ def kanban_board(request):
     
     # Get available users and teams for filter dropdowns
     # For company-scoped access, only show users/teams from the same company
-    if request.user.company_id:
-        available_users = User.objects.filter(company=request.user.company)
-        available_teams = Team.objects.filter(company=request.user.company)
-    else:
-        # For non-company users, show only relevant users/teams
+    if request.user.role == "admin":
         available_users = User.objects.filter(is_active=True)
+        available_teams = Team.objects.all()
+    elif request.user.company_id:
+        user_team_ids = request.user.teams.values_list("id", flat=True)
+        available_users = User.objects.filter(
+            Q(id=request.user.id) | Q(teams__id__in=user_team_ids),
+            company=request.user.company,
+            is_active=True,
+        ).distinct()
+        available_teams = Team.objects.filter(id__in=user_team_ids)
+    else:
+        available_users = User.objects.filter(id=request.user.id, is_active=True)
         available_teams = Team.objects.none()
     
     # Build applied filters list for display
@@ -378,6 +402,9 @@ def bug_detail(request, pk):
 
 @login_required
 def bug_create(request):
+    if not _can_report_bug(request.user):
+        messages.error(request, "Only reporters and admins can report new bugs.")
+        return redirect("web:dashboard")
     if request.method == "POST":
         form = BugReportForm(request.POST, request.FILES)
         if form.is_valid():

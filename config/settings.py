@@ -17,9 +17,26 @@ from django.contrib.messages import constants as messages
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-LOG_DIR = BASE_DIR / 'logs'
-LOG_DIR.mkdir(exist_ok=True)
+
+
+def resolve_log_dir():
+    preferred_dir = BASE_DIR / 'logs'
+    fallback_dir = BASE_DIR / 'runtime_logs'
+    for candidate in (preferred_dir, fallback_dir):
+        try:
+            candidate.mkdir(exist_ok=True)
+            probe = candidate / '.write_test'
+            probe.write_text('ok', encoding='utf-8')
+            probe.unlink(missing_ok=True)
+            return candidate
+        except OSError:
+            continue
+    return fallback_dir
+
+
+LOG_DIR = resolve_log_dir()
 LOG_DATE = date.today().isoformat()
+LOG_PROCESS_ID = os.getpid()
 
 ENV_FILE = BASE_DIR / '.env'
 if ENV_FILE.exists():
@@ -183,22 +200,17 @@ LOGGING = {
             'format': '[{asctime}] {levelname} {name}: {message}',
             'style': '{',
         },
-        'server': {
-            '()': 'django.utils.log.ServerFormatter',
-            'format': '[{server_time}] {message}',
-            'style': '{',
-        },
     },
     'handlers': {
         'daily_file': {
             'class': 'logging.FileHandler',
-            'filename': LOG_DIR / f'bugtracker_{LOG_DATE}.log',
+            'filename': LOG_DIR / f'bugtracker_{LOG_DATE}_{LOG_PROCESS_ID}.log',
             'encoding': 'utf-8',
             'formatter': 'verbose',
         },
         'errors_file': {
             'class': 'logging.FileHandler',
-            'filename': LOG_DIR / f'errors_{LOG_DATE}.log',
+            'filename': LOG_DIR / f'errors_{LOG_DATE}_{LOG_PROCESS_ID}.log',
             'encoding': 'utf-8',
             'formatter': 'verbose',
             'level': 'ERROR',
@@ -206,12 +218,6 @@ LOGGING = {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
-        },
-        'server_file': {
-            'class': 'logging.FileHandler',
-            'filename': LOG_DIR / f'bugtracker_{LOG_DATE}.log',
-            'encoding': 'utf-8',
-            'formatter': 'server',
         },
     },
     'root': {
@@ -230,7 +236,7 @@ LOGGING = {
             'propagate': False,
         },
         'django.server': {
-            'handlers': ['server_file', 'console'],
+            'handlers': ['daily_file', 'console'],
             'level': 'INFO',
             'propagate': False,
         },
